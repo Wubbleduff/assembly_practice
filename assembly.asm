@@ -22,8 +22,8 @@
 ;             RCX   RDX   R8   R9 stack
 ;  * float:      1    2    3    4    5+
 ;             XMM0 XMM1 XMM2 XMM3 stack
-; * Volatile:     RAX, RCX, RDX, R8, R9, R10, R11, and XMM0-XMM5
-; * Non-volatile: RBX, RBP, RDI, RSI, RSP, R12, R13, R14, R15, and XMM6-XMM15
+; * Volatile:     rax, rcx, rdx, r8, r9, r10, r11, and xmm0-xmm5
+; * Non-volatile: rbx, rbp, rdi, rsi, rsp, r12, r13, r14, r15, and xmm6-xmm15
 
 
 .data
@@ -35,6 +35,7 @@ EXTERN CreateWindowExA :PROC
 EXTERN RegisterClassA :PROC
 EXTERN GetLastError :PROC
 EXTERN DefWindowProcA :PROC
+EXTERN ShowWindow :PROC
 
 
 ;WindowProc    PROC
@@ -42,11 +43,13 @@ EXTERN DefWindowProcA :PROC
 ;WindowProc    ENDP
 
 
-WinMain    PROC                                            ; COMDAT
+MyWinMain    PROC                                            ; COMDAT
 
-        ; Store hInstance for later.
-        push rbx
-        mov rbx, rcx
+        ;push rbp
+        ;push rbx
+        ;sub rsp, 108h
+
+        ;mov rbx, rcx ; Save hInstance
 
         ; RegisterClassA
         ; ATOM RegisterClassA([in] const WNDCLASSA *lpWndClass);
@@ -62,43 +65,59 @@ WinMain    PROC                                            ; COMDAT
         ;     LPCSTR    lpszMenuName;      8 bytes (56)
         ;     LPCSTR    lpszClassName;     8 bytes (64)
         ; } WNDCLASSA, *PWNDCLASSA, *NPWNDCLASSA, *LPWNDCLASSA;
-        ; 68 bytes
         ; 72 bytes
-        sub rsp, 72
-        ; wc.style = CS_HREDRAW (0x0002) | CS_VREDRAW (0x0001)
-        mov rax, 3h
-        mov [rsp + 0], eax
-        ; wc.lpfnWndProc = WindowProc
-        lea rax, [DefWindowProcA]
-        mov [rsp + 8], rax
-        ; wc.cbClsExtra
-        xor rax, rax
-        mov [rsp + 16], eax
-        ; wc.cbWndExtra
-        xor rax, rax
-        mov [rsp + 20], eax
-        ; wc.hInstance
-        mov [rsp + 24], rcx
-        ; wc.hIcon
-        xor rax, rax
-        mov [rsp + 32], rax
-        ; wc.hCursor
-        xor rax, rax
-        mov [rsp + 40], rax
-        ; wc.hbrBackground
-        xor rax, rax
-        mov [rsp + 48], rax
-        ; wc.lpszMenuName
-        xor rax, rax
-        mov [rsp + 56], rax
-        ; wc.lpszClassName
-        lea rax, [window_class_str]
-        mov [rsp + 64], rax
-        mov rcx, rsp
-        sub     rsp, 40
-        call RegisterClassA
-        add rsp, 40
-        add rsp, 72
+        ;mov dword ptr [rsp + 20h + 0], 3h ; wc.style = CS_HREDRAW (0x0002) | CS_VREDRAW (0x0001)
+        ;lea rax, qword ptr [DefWindowProcA]
+        ;mov qword ptr [rsp + 20h + 8], rax ; wc.lpfnWndProc = WindowProc
+        ;mov dword ptr [rsp + 20h + 16], 0 ; wc.cbClsExtra
+        ;mov dword ptr [rsp + 20h + 20], 0 ; wc.cbWndExtra
+        ;mov qword ptr [rsp + 20h + 24], rbx ; wc.hInstance
+        ;mov qword ptr [rsp + 20h + 32], 0 ; wc.hIcon
+        ;mov qword ptr [rsp + 20h + 40], 0 ; wc.hCursor
+        ;mov qword ptr [rsp + 20h + 48], 0 ; wc.hbrBackground
+        ;mov qword ptr [rsp + 20h + 56], 0 ; wc.lpszMenuName
+        ;lea rax, qword ptr [window_class_str]
+        ;mov qword ptr [rsp + 20h + 64], rax ; wc.lpszClassName
+        ;lea rcx, qword ptr [rsp + 20h]
+        ;call RegisterClassA
+
+        ;call GetLastError
+
+
+
+
+
+        ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+        mov             dword ptr [rsp+20h], r9d
+        mov             qword ptr [rsp+18h], r8
+        mov             qword ptr [rsp+10h], rdx
+        mov             qword ptr [rsp+8h], rcx
+        sub             rsp, 0c8h
+        mov             dword ptr [rsp+70h], 03h
+        ;mov             rax, qword ptr [rip+9527Eh]
+        lea rax, qword ptr [DefWindowProcA]
+        mov qword ptr [rsp + 20h + 8], rax ; wc.lpfnWndProc = WindowProc
+        mov             qword ptr [rsp+78h], rax
+        mov             dword ptr [rsp+80h], 0h
+        mov             dword ptr [rsp+84h], 0h
+        mov             rax, qword ptr [rsp+0d0h]
+        mov             qword ptr [rsp+88h], rax
+        mov             qword ptr [rsp+90h], 0h
+        mov             qword ptr [rsp+98h], 0h
+        mov             qword ptr [rsp+0a0h], 0h
+        mov             qword ptr [rsp+0a8h], 0h
+        ;mov             rax, qword ptr [rip+8be7ch]
+        lea rax, qword ptr [window_class_str]
+        mov qword ptr [rsp + 20h + 64], rax ; wc.lpszClassName
+        mov             qword ptr [rsp+0b0h], rax
+        lea             rcx, qword ptr [rsp+70h]
+        call            RegisterClassA
+        mov             word ptr [rsp+60h], ax
+        call            GetLastError
+        
+
+        ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 
         ; call CreateWindowExA
@@ -116,43 +135,35 @@ WinMain    PROC                                            ; COMDAT
         ;         [in, optional] HINSTANCE hInstance,     
         ;         [in, optional] LPVOID    lpParam        
         ;         );
-        ; dwExStyle
-        xor rcx, rcx
-        ; lpClassName
-        lea rdx, [window_class_str]
-        ; lpWindowName
-        lea r8, [window_str]
-        ; dwStyle
-        ; WS_POPUP (0x80000000) | WS_VISIBLE (0x10000000)
-        mov r9, 90000000h
-        ; X
-        sub rsp, 64
-        mov rax, 100
-        mov qword ptr [rsp + 0], rax
-        ; Y
-        mov qword ptr [rsp + 8], rax
-        ; nWidth
-        mov rax, 500
-        mov qword ptr [rsp + 16], rax
-        ; nHeight
-        mov qword ptr [rsp + 24], rax
-        ; nWndParent
-        xor rax, rax
-        mov qword ptr [rsp + 32], rax
-        ; hMenu
-        mov qword ptr [rsp + 40], rax
-        ; hInstance
-        mov qword ptr [rsp + 48], rbx
-        ; lpParam
-        mov qword ptr [rsp + 56], rax
-        sub rsp, 32
+        xor rcx, rcx ; dwExStyle
+        lea rdx, qword ptr [window_class_str] ; lpClassName
+        lea r8, qword ptr [window_str] ; lpWindowName
+        mov r9, 90000000h ; dwStyle = WS_POPUP (0x80000000) | WS_VISIBLE (0x10000000)
+        mov dword ptr [rsp + 20h + 0], 100 ; X
+        mov dword ptr [rsp + 20h + 8], 100 ; Y
+        mov dword ptr [rsp + 20h + 16], 500 ; nWidth
+        mov dword ptr [rsp + 20h + 24], 500 ; nHeight
+        mov qword ptr [rsp + 20h + 32], 0 ; nWndParent
+        mov qword ptr [rsp + 20h + 40], 0 ; hMenu
+        mov qword ptr [rsp + 20h + 48], rbx ; hInstance
+        mov qword ptr [rsp + 20h + 56], 0 ; lpParam
         call CreateWindowExA
-        add rsp, 32
-        add rsp, 64
 
+        ; BOOL ShowWindow(
+        ;         [in] HWND hWnd,
+        ;         [in] int  nCmdShow
+        ;         );
+        mov rcx, rax
+        mov rdx, 10
+        call ShowWindow
+
+        xor rax, rax
+
+        add rsp, 108h
         pop rbx
+        pop rbp
         ret     0
-WinMain    ENDP
+MyWinMain    ENDP
 
 end
 
