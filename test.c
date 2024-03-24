@@ -118,34 +118,28 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
     ShowWindow(hwnd, SW_SHOWDEFAULT);
 
     HDC DIB_handle;
-    int fb_width = 500;
-    int fb_height = 500;
+    int fb_width = 0;
+    int fb_height = 0;
     int* fb;
     {
         // Create DIB
-        HBITMAP DIB_bitmap;
-        int DIB_row_byte_width;
-        HDC hdc = GetDC(hwnd);
         RECT client_rect;
         GetClientRect(hwnd, &client_rect);
         fb_width = client_rect.right;
         fb_height = client_rect.bottom;
-        int bitCount = 32;
-        DIB_row_byte_width = ((fb_width * (bitCount / 8) + 3) & -4);
-        int totalBytes = DIB_row_byte_width * fb_height;
-        BITMAPINFO mybmi = {0};
-        mybmi.bmiHeader.biSize = sizeof(mybmi);
-        mybmi.bmiHeader.biWidth = fb_width;
-        mybmi.bmiHeader.biHeight = -fb_height;
-        mybmi.bmiHeader.biPlanes = 1;
-        mybmi.bmiHeader.biBitCount = bitCount;
-        mybmi.bmiHeader.biCompression = BI_RGB;
-        mybmi.bmiHeader.biSizeImage = totalBytes;
-        mybmi.bmiHeader.biXPelsPerMeter = 0;
-        mybmi.bmiHeader.biYPelsPerMeter = 0;
+        BITMAPINFO bmi = {
+            .bmiHeader.biSize = sizeof(BITMAPINFO),
+            .bmiHeader.biWidth = fb_width,
+            .bmiHeader.biHeight = -fb_height,
+            .bmiHeader.biPlanes = 1,
+            .bmiHeader.biBitCount = 32,
+            .bmiHeader.biCompression = BI_RGB,
+            .bmiHeader.biSizeImage = fb_width * fb_height * sizeof(int),
+        };
+        HDC hdc = GetDC(NULL);
         DIB_handle = CreateCompatibleDC(hdc);
-        DIB_bitmap = CreateDIBSection(hdc, &mybmi, DIB_RGB_COLORS, (VOID **)&fb, NULL, 0);
-        (HBITMAP)SelectObject(DIB_handle, DIB_bitmap);
+        HBITMAP DIB_bitmap = CreateDIBSection(hdc, &bmi, DIB_RGB_COLORS, (VOID **)&fb, NULL, 0);
+        SelectObject(DIB_handle, DIB_bitmap);
         ReleaseDC(hwnd, hdc);
     }
     const int fb_size = fb_width * fb_height;
@@ -165,6 +159,14 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
             }
             TranslateMessage(&msg);
             DispatchMessage(&msg);
+        }
+
+        for(int y = 32; y < 64; y++)
+        {
+            for(int x = 32; x < 64; x++)
+            {
+                fb[y * fb_width + x] = 0xFFFFFFFF;
+            }
         }
 
         HDC hdc = GetDC(hwnd);
