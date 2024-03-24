@@ -31,14 +31,36 @@ EXTERN PeekMessageA :PROC
 EXTERN DispatchMessageA :PROC
 EXTERN TranslateMessage :PROC
 EXTERN ExitProcess :PROC
+EXTERN GetClientRect :PROC
+EXTERN GetDC :PROC
+EXTERN CreateCompatibleDC :PROC
+EXTERN CreateDIBSection :PROC
+EXTERN SelectObject :PROC
+EXTERN ReleaseDC :PROC
+EXTERN BitBlt :PROC
 
 
 
 MyWinMain    PROC
+    push rbx
     push rbp
     mov rbp, rsp
-    push rbx
-    sub rsp, 208h
+    push rdi
+    push rsi
+    push rsp
+    push r12
+    push r13
+    push r14
+    push r15
+
+    sub rsp, 300h
+
+    ; rsp + 0x100 : u64 hdc
+    ; rsp + 0x108 : u64 hwnd
+    ; rsp + 0x110 : RECT client_rect
+    ; rsp + 0x120 : u64 DIB_handle
+    ; rsp + 0x128 : u32* fb
+    ; rsp + 0x130 : u64 DIB_bitmap
 
     mov rbx, rcx ; Save hInstance
 
@@ -92,19 +114,17 @@ MyWinMain    PROC
     xor rcx, rcx ; dwExStyle
     lea rdx, qword ptr [window_class_str] ; lpClassName
     lea r8, qword ptr [window_str] ; lpWindowName
-
     mov r9, 0cf0000h ; 90000000h ; dwStyle = WS_POPUP (0x80000000) | WS_VISIBLE (0x10000000)
     mov dword ptr [rsp + 20h + 0], 100 ; X
     mov dword ptr [rsp + 20h + 8], 100 ; Y
-    mov dword ptr [rsp + 20h + 16], 500 ; nWidth
-    mov dword ptr [rsp + 20h + 24], 500 ; nHeight
+    mov dword ptr [rsp + 20h + 16], 1200 ; nWidth
+    mov dword ptr [rsp + 20h + 24], 800 ; nHeight
     mov qword ptr [rsp + 20h + 32], 0 ; nWndParent
     mov qword ptr [rsp + 20h + 40], 0 ; hMenu
     mov qword ptr [rsp + 20h + 48], rbx ; hInstance
-    ;mov  rax, qword ptr [rsp+0d0h]
-    ;mov qword ptr [rsp + 20h + 48], rax ; hInstance
     mov qword ptr [rsp + 20h + 56], 0 ; lpParam
     call CreateWindowExA
+    mov qword ptr [rsp + 108h], rax ; hwnd
 
     ; BOOL ShowWindow(
     ;         [in] HWND hWnd,
@@ -115,9 +135,90 @@ MyWinMain    PROC
     call ShowWindow
     call GetLastError
 
+    ; BOOL GetClientRect(
+    ;   [in]  HWND   hWnd,
+    ;   [out] LPRECT lpRect
+    ; );
+    mov rcx, qword ptr [rsp + 108h]
+    lea rdx, dword ptr [rsp + 110h]
+    call GetClientRect ; client_rect
+    call GetLastError
+
+    ; BITMAPINFO
+    ; sizeof(BITMAPINFO) = 0x2c
+    ; typedef struct tagBITMAPINFO {
+    ;     BITMAPINFOHEADER bmiHeader;
+    ;     RGBQUAD          bmiColors[1];
+    ; } BITMAPINFO, *LPBITMAPINFO, *PBITMAPINFO;
+    ; typedef struct tagBITMAPINFOHEADER {
+    ;     DWORD biSize;            0x0
+    ;     LONG  biWidth;           0x4
+    ;     LONG  biHeight;          0x8
+    ;     WORD  biPlanes;          0xC
+    ;     WORD  biBitCount;        0xE
+    ;     DWORD biCompression;     0x10
+    ;     DWORD biSizeImage;       0x14
+    ;     LONG  biXPelsPerMeter;   0x18
+    ;     LONG  biYPelsPerMeter;   0x1C
+    ;     DWORD biClrUsed;         0x20
+    ;     DWORD biClrImportant;    0x24
+    ; } BITMAPINFOHEADER, *LPBITMAPINFOHEADER, *PBITMAPINFOHEADER;
+    ; typedef struct tagRGBQUAD {
+    ;     BYTE rgbBlue;
+    ;     BYTE rgbGreen;
+    ;     BYTE rgbRed;
+    ;     BYTE rgbReserved;
+    ; } RGBQUAD;
+    ; Creating a BITMAPINFOHEADER at rsp + 0x200
+    vxorps ymm0, ymm0, ymm0
+    vmovups ymmword ptr [rsp + 200h], ymm0
+    vmovups ymmword ptr [rsp + 220h], ymm0
+    mov dword ptr [rsp + 200h + 0h], 2ch ; bmiHeader.biSize
+    mov eax, dword ptr [rsp + 110h + 8h]
+    mov dword ptr [rsp + 200h + 4h], eax ; bmiHeader.biWidth
+    mov ecx, dword ptr [rsp + 110h + 0ch]
+    mov dword ptr [rsp + 200h + 8h], ecx ; bmiHeader.biHeight
+    mov dword ptr [rsp + 200h + 0ch], 1 ; bmiHeader.biPlanes
+    mov dword ptr [rsp + 200h + 0eh], 20h ; bmiHeader.biBitCount
+    mov dword ptr [rsp + 200h + 10h], 0 ; bmiHeader.biCompression, BI_RGB = 0
+    imul eax, ecx
+    imul eax, 4
+    mov dword ptr [rsp + 200h + 14h], eax ; bmiHeader.biSizeImage
+    xor rcx, rcx
+    call GetDC
+    mov qword ptr [rsp + 100h], rax ; hdc
+    mov rcx, rax
+    call CreateCompatibleDC
+    mov qword ptr [rsp + 120h], rax ; DIB_handle
+
+    ; HBITMAP CreateDIBSection(
+    ;         [in]  HDC              hdc,
+    ;         [in]  const BITMAPINFO *pbmi,
+    ;         [in]  UINT             usage,
+    ;         [out] VOID             **ppvBits,
+    ;         [in]  HANDLE           hSection,
+    ;         [in]  DWORD            offset
+    ;         );
+    mov rcx, qword ptr [rsp + 100h]
+    lea rdx, qword ptr [rsp + 200h]
+    xor r8, r8
+    lea r9, qword ptr [rsp + 128h]
+    mov qword ptr [rsp + 20h + 0], 0
+    mov dword ptr [rsp + 20h + 8], 0
+    call CreateDIBSection ; fb
+    mov qword ptr [rsp + 130h], rax
+
+    mov rcx, qword ptr [rsp + 120h]
+    mov rdx, rax
+    call SelectObject
+
+    mov rcx, qword ptr [rsp + 108h]
+    mov rdx, qword ptr [rsp + 100h]
+    call ReleaseDC
+    
+
     loop_top:
 
-        ; sizeof(MSG) = 0x30
         ; typedef struct tagMSG {
         ;   HWND   hwnd;
         ;   UINT   message;
@@ -127,6 +228,7 @@ MyWinMain    PROC
         ;   POINT  pt;
         ;   DWORD  lPrivate;
         ; } MSG, *PMSG, *NPMSG, *LPMSG;
+        ; sizeof(MSG) = 0x30
         ;
         ; BOOL PeekMessageA(
         ;   [out]          LPMSG lpMsg,
@@ -138,10 +240,10 @@ MyWinMain    PROC
         ;
         ; Create MSG at rsp + 0x100
         vxorps  ymm0, ymm0, ymm0
-        vmovups ymmword ptr [rsp + 100h], ymm0
-        vmovups ymmword ptr [rsp + 100h + 10h], ymm0
+        vmovups ymmword ptr [rsp + 200h], ymm0
+        vmovups ymmword ptr [rsp + 200h + 10h], ymm0
         ; Call PeekMessageA
-        lea rcx, [rsp + 100h]
+        lea rcx, [rsp + 200h]
         mov rdx, 0
         mov r8, 0
         mov r9, 0
@@ -151,22 +253,102 @@ MyWinMain    PROC
         ; BOOL TranslateMessage(
         ;   [in] const MSG *lpMsg
         ; );
-        lea rcx, [rsp + 100h]
+        lea rcx, [rsp + 200h]
         call TranslateMessage
 
         ; LRESULT DispatchMessageA(
         ;   [in] const MSG *lpMsg
         ; );
-        lea rcx, [rsp + 100h]
+        lea rcx, [rsp + 200h]
         call DispatchMessageA
+
+
+
+
+
+        
+        ; Fill background
+        mov rdi, qword ptr [rsp + 128h]
+        mov eax, 0ff11fff3h
+        mov r8d, dword ptr [rsp + 110h + 8h]
+        mov ecx, dword ptr [rsp + 110h + 0ch]
+        imul ecx, r8d
+        rep stosd
+
+
+
+        mov rax, 0 ; y
+        mov r8d, dword ptr [rsp + 110h + 8h] ; width
+        imul r8d, 4
+        mov rdi, qword ptr [rsp + 128h] ; fb
+        add rdi, 256
+        loop_square_outer:
+            mov rbx, 0 ; x
+            loop_square_inner:
+                mov dword ptr [rdi], 0ff0000ffh
+                add rdi, 4
+                add rbx, 4
+                cmp rbx, 256
+                jnz loop_square_inner
+            sub rdi, 256
+            add rdi, r8
+            add rax, 4
+            cmp rax, 256
+            jnz loop_square_outer
+
+        
+
+
+        ; Blit
+        mov rcx, qword ptr [rsp + 108h]
+        call GetDC
+        mov qword ptr [rsp + 100h], rax ; hdc
+        ; BOOL BitBlt(
+        ;         [in] HDC   hdc,
+        ;         [in] int   x,
+        ;         [in] int   y,
+        ;         [in] int   cx,
+        ;         [in] int   cy,
+        ;         [in] HDC   hdcSrc,
+        ;         [in] int   x1,
+        ;         [in] int   y1,
+        ;         [in] DWORD rop
+        ;         );
+        mov rcx, rax ; hdc
+        mov rdx, 0 ; x
+        mov r8, 0 ; y
+        mov r9d, dword ptr [rsp + 110h + 8h] ; cx
+        mov eax, dword ptr [rsp + 110h + 0ch]
+        mov dword ptr [rsp + 20h + 0h], eax ; cy
+        mov rax, qword ptr [rsp + 120h]
+        mov qword ptr [rsp + 20h + 8h], rax ; hdcSrc (DIB_handle)
+        mov qword ptr [rsp + 20h + 10h], 0 ; x1
+        mov qword ptr [rsp + 20h + 18h], 0 ; y1
+        mov qword ptr [rsp + 20h + 20h], 0cc0020h ; rop (SRCCOPY = 0cc0020h)
+        call BitBlt
+        mov rcx, qword ptr [rsp + 108h]
+        mov rdx, qword ptr [rsp + 100h]
+        call ReleaseDC
+
 
         jmp loop_top
 
     xor rax, rax
 
-    add rsp, 208h
-    pop rbx
     pop rbp
+
+    add rsp, 300h
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rsp
+    pop rsi
+    pop rdi
+    pop rbp
+    pop rbx
+
+
     ret     0
 MyWinMain    ENDP
 
@@ -232,6 +414,15 @@ WindowProc    PROC
 
     ret
 WindowProc    ENDP
+
+
+
+; rcx : u32 - Pos x
+; rdx : u32 - Pos y
+; r8 : u32 - width
+; r9 : u32 - height
+draw_square PROC
+draw_square ENDP
 
 
 

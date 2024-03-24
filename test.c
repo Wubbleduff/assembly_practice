@@ -136,6 +136,20 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
             .bmiHeader.biCompression = BI_RGB,
             .bmiHeader.biSizeImage = fb_width * fb_height * sizeof(int),
         };
+
+        int v0 = offsetof(BITMAPINFOHEADER, biSize);
+        int v1 = offsetof(BITMAPINFOHEADER, biWidth);
+        int v2 = offsetof(BITMAPINFOHEADER, biHeight);
+        int v3 = offsetof(BITMAPINFOHEADER, biPlanes);
+        int v4 = offsetof(BITMAPINFOHEADER, biBitCount);
+        int v5 = offsetof(BITMAPINFOHEADER, biCompression);
+        int v6 = offsetof(BITMAPINFOHEADER, biSizeImage);
+        int v7 = offsetof(BITMAPINFOHEADER, biXPelsPerMeter);
+        int v8 = offsetof(BITMAPINFOHEADER, biYPelsPerMeter);
+        int v9 = offsetof(BITMAPINFOHEADER, biClrUsed);
+        int v10 = offsetof(BITMAPINFOHEADER, biClrImportant);
+
+
         HDC hdc = GetDC(NULL);
         DIB_handle = CreateCompatibleDC(hdc);
         HBITMAP DIB_bitmap = CreateDIBSection(hdc, &bmi, DIB_RGB_COLORS, (VOID **)&fb, NULL, 0);
@@ -170,6 +184,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
         }
 
         HDC hdc = GetDC(hwnd);
+        asdf = SRCCOPY;
         BitBlt(hdc, 0, 0, fb_width, fb_height, DIB_handle, 0, 0, SRCCOPY);
         ReleaseDC(hwnd, hdc);
     }
